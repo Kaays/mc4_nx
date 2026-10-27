@@ -33,13 +33,16 @@ void mc4_gl_set_interval(int interval);
 
 /* mc4_input.c: controllers and the touch screen -> the engine. */
 void mc4_input_init(void);
-void mc4_input_poll(int have_menus); /* 1: mc4_menu_name() works */
+void mc4_input_poll(int play); /* mc4_play_state(): 1 play, 0 menu, -1 unknown */
 
 /* mc4_main.c: the Flash menu on top (MC4_HUD_MENU in gameplay), or NULL. */
 const char *mc4_menu_name(void);
 #define MC4_HUD_MENU "HUD"
-/* mc4_main.c: GL2JNILib.nativeSetDoubleUp (sprint). */
+/* mc4_main.c: GL2JNILib.nativeSetDoubleUp / Dn (sprint / crouch). */
 void mc4_set_double_up(int on);
+void mc4_set_double_dn(int on);
+/* mc4_main.c: 1 in play, 0 in a menu (pause, death, main...), -1 unknown. */
+int mc4_play_state(void);
 /* The gamepad mode the game is told (MC4.java: 5, a "Generic X-Box" pad). */
 #define MC4_PAD_MODE 5
 

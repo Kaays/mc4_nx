@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <switch.h>
+#include <unistd.h>
 
 #include "dcr_path.h"
 #include "dcr_setup.h"
@@ -146,12 +147,19 @@ static JNI_H_DECL(h_get_resource) {
  * MC4.nativeSetIsMogaConnected writes; mc4_main.c sets it). */
 static JNI_H_DECL(h_pad_mode) { return jv_i(MC4_PAD_MODE); }
 
-/* GL2JNILib.exitGame (Exit in the main menu): the game has shut itself down;
- * the frame loop must stop calling into it (hardware: a key sent after it
- * reached Application::AddKeyUp on a NULL Application). */
+/* GL2JNILib.exitGame (Exit in the main menu). On a phone the activity
+ * finishes and the process dies. Here the game went on, in the same frame,
+ * into glf::AndroidDestroy and its destructors, and died in one of them
+ * (hardware: BITrackingManager's); a key sent after it reached
+ * Application::AddKeyUp on a NULL Application. So the process ends here, as
+ * Android's would: the sound stopped, the log written, _exit (libnx closes
+ * its services). The game saves as it goes, not on exit. */
 static JNI_H_DECL(h_exit_game) {
-  debugPrintf("[mc4] exitGame\n");
+  debugPrintf("[mc4] exitGame: leaving\n");
   rt_request_exit();
+  mc4_audio_shutdown();
+  log_flush_ring();
+  _exit(0);
   return jv_none();
 }
 

@@ -12,9 +12,9 @@
  *   R  123 grenade       L3 sprint (nativeSetDoubleUp: on with a click, off
  *                           with another, the stick at rest, aiming or a menu)
  *   Y  99 reload         X / L 100 weapon switch
- *   B  20 crouch         A  23 action
+ *   B  crouch (nativeSetDoubleDn, held)   A  23 action
  *   D-pad 19-22   + 108 START (pause)   - 109 SELECT
- * In menus (any Flash menu on top but the HUD): A selects (23), B goes back
+ * In menus (anything but play: mc4_play_state): A selects (23), B goes back
  * (BACK reaches the game as MC4.nativeHandleKey(4) on release, as on a
  * phone), the D-pad moves. debug.log lists every key sent
  * ("[input] key 23 down").
@@ -54,6 +54,7 @@ enum {
   AK_BUTTON_START = 108,
   AK_BUTTON_SELECT = 109,
   AK_MOVE_END = 123,
+  AK_CROUCH = 127, /* not a key: nativeSetDoubleDn (a double tap of down) */
   AK_MAX = 128
 };
 
@@ -67,7 +68,7 @@ static const Map k_map[] = {
     {HidNpadButton_ZL, AK_BUTTON_L1, AK_BUTTON_L1},
     {HidNpadButton_R, AK_MOVE_END, AK_NONE},
     {HidNpadButton_L, AK_BUTTON_Y, AK_NONE},
-    {HidNpadButton_B, AK_DPAD_DOWN, AK_BACK},
+    {HidNpadButton_B, AK_CROUCH, AK_BACK},
     {HidNpadButton_A, AK_DPAD_CENTER, AK_DPAD_CENTER},
     {HidNpadButton_Y, AK_BUTTON_X, AK_BUTTON_X},
     {HidNpadButton_X, AK_BUTTON_Y, AK_BUTTON_Y},
@@ -124,13 +125,17 @@ static void key(int k, int down) {
     debugPrintf("[input] key %d down\n", k);
     /* BACK: MC4.java swallows the press and hands the release to
      * nativeHandleKey (onKeyDown 4 returns at once, onKeyUp 4 calls it) */
-    if (k != AK_BACK && f_key)
+    if (k == AK_CROUCH)
+      mc4_set_double_dn(1);
+    else if (k != AK_BACK && f_key)
       f_key(g_jni_env, g_cls, k, 1);
   } else if (g_key_refs[k] > 0) {
     if (--g_key_refs[k] != 0)
       return;
     debugPrintf("[input] key %d up\n", k);
-    if (k == AK_BACK) {
+    if (k == AK_CROUCH) {
+      mc4_set_double_dn(0);
+    } else if (k == AK_BACK) {
       if (f_handle_key)
         f_handle_key(g_jni_env, g_activity, AK_BACK);
     } else if (f_key) {
@@ -243,7 +248,7 @@ static void track_pause(u64 pressed, u64 held, float lx, float ly) {
   }
 }
 
-void mc4_input_poll(int have_menus) {
+void mc4_input_poll(int play) {
   padUpdate(&g_pad);
   float sticks[4] = {0};
   u64 held = rt_pad_read(&g_pad, sticks);
@@ -251,18 +256,18 @@ void mc4_input_poll(int have_menus) {
   u64 pressed = held & ~prev_held;
   prev_held = held;
 
-  /* Which mapping: the game's own top menu -- the HUD is play, any other
-   * menu (pause, death, debriefing, a skippable cutscene...) takes A/B. */
-  const char *menu = mc4_menu_name();
-  static char last_menu[48];
-  if (menu && strncmp(menu, last_menu, sizeof last_menu - 1)) {
-    snprintf(last_menu, sizeof last_menu, "%s", menu);
-    debugPrintf("[input] menu %s\n", last_menu);
+  /* Which mapping: in play (mc4_play_state: the HUD up, no menu over it)
+   * the play keys; anywhere else (main menu, pause, death, cutscene) the
+   * menu keys. Only when that cannot be told does the + tracking stand in. */
+  static int last_play = -2;
+  if (play != last_play) {
+    debugPrintf("[input] %s\n", play == 1 ? "in play" : play == 0 ? "in a menu" : "play state unknown");
+    last_play = play;
   }
   int game_keys;
-  if (have_menus && menu) {
+  if (play >= 0) {
     g_pause_menu = 0;
-    game_keys = strstr(menu, MC4_HUD_MENU) != NULL;
+    game_keys = play;
   } else {
     track_pause(pressed, held, sticks[0], sticks[1]);
     game_keys = !g_pause_menu;
