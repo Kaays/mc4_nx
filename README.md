@@ -15,7 +15,7 @@ Java (JNI) and OpenGL ES the game calls, answered by this port. Graphics are Mes
 **No game code or assets are included**, here or in the releases. You need your own copy of the game.
 
 > [!IMPORTANT]
-> **Version 1.0.0 — playable.** Tested on hardware in the campaign: menus, gameplay, sound, the Gameloft logo, the
+> **Version 1.0.1 — playable.** Tested on hardware in the campaign: menus, gameplay, sound, the Gameloft logo, the
 > mission briefing videos and the in-game cutscenes, the pause and death screens, saves (campaign progress and
 > money) across restarts, the game's languages (Turkish included) and quitting from the main menu. 60 FPS target,
 > 720p handheld / 1080p docked. Latest version: see [Releases](../../releases).

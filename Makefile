@@ -6,7 +6,7 @@
 #---------------------------------------------------------------------------------
 TARGET               := mc4_nx
 PORT_NPDM_PROGRAM_ID := 0x01000000000010C4
-PORT_NPDM_VERSION    := 1.0.0
+PORT_NPDM_VERSION    := 1.0.1
 # The engine runs on the main thread (as GLSurfaceView's on a phone): 10 MB.
 PORT_NPDM_MAIN_STACK := 0xA00000
 # The engine reads its OBB zips with many small freads.
