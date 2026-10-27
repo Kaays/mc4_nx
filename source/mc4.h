@@ -33,7 +33,8 @@ void mc4_gl_set_interval(int interval);
 
 /* mc4_input.c: controllers and the touch screen -> the engine. */
 void mc4_input_init(void);
-void mc4_input_poll(int play); /* mc4_play_state(): 2 cutscene, 1 play, 0 menu, -1 unknown */
+void mc4_input_poll(int play, int qte); /* mc4_play_state(): 2 cutscene, 1 play, 0 menu, -1 unknown;
+                                         mc4_qte_state() */
 void mc4_input_swallow_held(void); /* buttons down now reach the game only after a release */
 
 /* mc4_main.c: the Flash menu on top (MC4_HUD_MENU in gameplay), or NULL. */
@@ -44,6 +45,7 @@ void mc4_set_double_up(int on);
 void mc4_set_double_dn(int on);
 /* mc4_main.c: 1 in play, 0 in a menu (pause, death, main...), -1 unknown. */
 int mc4_play_state(void);
+int mc4_qte_state(void); /* the Hud's QTE type, -1 when none */
 /* The gamepad mode the game is told (MC4.java: 5, a "Generic X-Box" pad). */
 #define MC4_PAD_MODE 5
 

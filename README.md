@@ -101,6 +101,10 @@ The port asks the game whether the player is in play or in a menu (pause, death,
 and goes back everywhere else. **Only + skips** the videos (the Gameloft logo, the briefings) and the in-game
 cutscenes; A, B and taps do not.
 
+**Quick-time events** (the bar filled with a finger, for example when an enemy grabs you in a cutscene): the touch
+screen works as on a phone, and when docked the right stick is the finger: flick it the way the finger would swipe,
+again and again.
+
 ## config.ini
 
 Created on the first start; each line is described in the file.

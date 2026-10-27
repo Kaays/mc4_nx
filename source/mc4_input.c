@@ -18,7 +18,10 @@
  * (BACK reaches the game as MC4.nativeHandleKey(4) on release, as on a
  * phone), the D-pad moves. In a cutscene only + reaches the game (108:
  * Application::updateXPCutScene skips on it, as it would on A or a tap,
- * which are held back there). debug.log lists every key sent
+ * which are held back there) -- except during a quick-time event (the bar
+ * filled by a finger, mc4_qte_state): then the touch screen works, and the
+ * right stick drags a finger from the middle of the screen (docked play:
+ * flick it the way the finger would go, again and again). debug.log lists every key sent
  * ("[input] key 23 down").
  *
  * A key held by two buttons at once is pressed once and released when the
@@ -270,7 +273,33 @@ void mc4_input_swallow_held(void) {
   g_swallow = rt_pad_read(&g_pad, sticks);
 }
 
-void mc4_input_poll(int play) {
+/* The right stick as a finger during a QTE: down in the middle of the
+ * screen when the stick leaves the centre, following it up to a third of
+ * the screen away, up when it comes back. */
+#define QTE_FINGER 15
+static int g_qte_finger;
+
+static void qte_stick(int qte, float x, float y) {
+  if (!f_touch)
+    return;
+  int w = 1280, h = 720;
+  dcr_window_size(&w, &h);
+  float mag = sqrtf(x * x + y * y);
+  int cx = w / 2, cy = h / 2;
+  int px = cx + (int)(x * (float)h / 3), py = cy + (int)(y * (float)h / 3);
+  if (qte >= 0 && !g_qte_finger && mag > 0.5f) {
+    f_touch(g_jni_env, g_cls, 1, cx, cy, QTE_FINGER);
+    f_touch(g_jni_env, g_cls, 2, px, py, QTE_FINGER);
+    g_qte_finger = 1;
+  } else if (g_qte_finger && qte >= 0 && mag > 0.3f) {
+    f_touch(g_jni_env, g_cls, 2, px, py, QTE_FINGER);
+  } else if (g_qte_finger) {
+    f_touch(g_jni_env, g_cls, 0, px, py, QTE_FINGER);
+    g_qte_finger = 0;
+  }
+}
+
+void mc4_input_poll(int play, int qte) {
   padUpdate(&g_pad);
   float sticks[4] = {0};
   u64 held = rt_pad_read(&g_pad, sticks);
@@ -283,6 +312,14 @@ void mc4_input_poll(int play) {
   /* Which mapping: in play (mc4_play_state: the HUD up, no menu over it)
    * the play keys; anywhere else (main menu, pause, death, cutscene) the
    * menu keys. Only when that cannot be told does the + tracking stand in. */
+  static int last_qte = -1;
+  if (qte != last_qte) {
+    if (qte >= 0)
+      debugPrintf("[input] quick-time event (type %d): touch and the right stick work\n", qte);
+    else
+      debugPrintf("[input] quick-time event over\n");
+    last_qte = qte;
+  }
   static int last_play = -2;
   if (play != last_play) {
     debugPrintf("[input] %s\n", play == 2   ? "in a cutscene"
@@ -326,8 +363,9 @@ void mc4_input_poll(int play) {
   /* right: look, down positive (AXIS_RZ as it comes) */
   float rx = sticks[2], ry = sticks[3];
   deadzone(&rx, &ry);
+  qte_stick(qte, rx, -ry); /* screen y grows downwards */
   float sp = g_mc4_cfg.look_speed;
   feed(&g_right, f_pad_right, rx * sp, (g_mc4_cfg.invert_y ? ry : -ry) * sp);
 
-  poll_touch(!cutscene);
+  poll_touch(!cutscene || qte >= 0);
 }

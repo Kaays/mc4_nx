@@ -201,6 +201,19 @@ static int in_cutscene(uint8_t *gp) {
   return ch && ch[0x8a4];
 }
 
+/* A quick-time event (the bar filled with a finger, in and out of cutscenes):
+ * the Hud's QTE type (+0x98c), set by Hud::ResetQTEInput when one starts,
+ * -1 from Hud::Hud and Hud::EndQTE / ClearQTE. -1 when none (or no Hud). */
+int mc4_qte_state(void) {
+  if (!g_gameplay)
+    return -1;
+  uint8_t *gp = *g_gameplay;
+  if (!gp || !*(void **)(gp + 0x38))
+    return -1;
+  uint8_t *hud = *(uint8_t **)(gp + 0x1c);
+  return hud ? *(int32_t *)(hud + 0x98c) : -1;
+}
+
 int mc4_play_state(void) {
   if (!g_gameplay || !f_world_started)
     return -1;
@@ -362,7 +375,7 @@ void port_run(void) {
     }
     dcr_boost_frame_begin();
     tell_pad_mode(frame);
-    mc4_input_poll(mc4_play_state());
+    mc4_input_poll(mc4_play_state(), mc4_qte_state());
     f_step(g_jni_env, g_glf_cls);
     if (rt_exit_requested()) /* exitGame: the game has shut down */
       break;
