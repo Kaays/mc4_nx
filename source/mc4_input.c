@@ -16,7 +16,9 @@
  *   D-pad 19-22   + 108 START (pause)   - 109 SELECT
  * In menus (anything but play: mc4_play_state): A selects (23), B goes back
  * (BACK reaches the game as MC4.nativeHandleKey(4) on release, as on a
- * phone), the D-pad moves. debug.log lists every key sent
+ * phone), the D-pad moves. In a cutscene only + reaches the game (108:
+ * Application::updateXPCutScene skips on it, as it would on A or a tap,
+ * which are held back there). debug.log lists every key sent
  * ("[input] key 23 down").
  *
  * A key held by two buttons at once is pressed once and released when the
@@ -179,13 +181,23 @@ static void feed(Stick *s, pad_fn fn, float x, float y) {
 
 static Stick g_left, g_right;
 
-static void poll_touch(void) {
+static void poll_touch(int new_touches) {
   static HidTouchScreenState old;
   HidTouchScreenState st;
   if (!f_touch || !hidGetTouchScreenStates(&st, 1))
     return;
   if (!g_mc4_cfg.touch)
     st.count = 0;
+  if (!new_touches) { /* a cutscene: fingers already down go on, new ones wait */
+    int n = 0;
+    for (int i = 0; i < st.count; i++)
+      for (int j = 0; j < old.count; j++)
+        if (old.touches[j].finger_id == st.touches[i].finger_id) {
+          st.touches[n++] = st.touches[i];
+          break;
+        }
+    st.count = n;
+  }
   int w = 1280, h = 720;
   dcr_window_size(&w, &h);
   /* the panel is 1280x720 in either mode; the game's surface is the window */
@@ -248,10 +260,22 @@ static void track_pause(u64 pressed, u64 held, float lx, float ly) {
   }
 }
 
+/* After a video: what is held now (the + that skipped it) waits for a
+ * release before it counts, or the game would take it for a pause. */
+static u64 g_swallow;
+
+void mc4_input_swallow_held(void) {
+  padUpdate(&g_pad);
+  float sticks[4];
+  g_swallow = rt_pad_read(&g_pad, sticks);
+}
+
 void mc4_input_poll(int play) {
   padUpdate(&g_pad);
   float sticks[4] = {0};
   u64 held = rt_pad_read(&g_pad, sticks);
+  g_swallow &= held;
+  held &= ~g_swallow;
   static u64 prev_held;
   u64 pressed = held & ~prev_held;
   prev_held = held;
@@ -261,13 +285,17 @@ void mc4_input_poll(int play) {
    * menu keys. Only when that cannot be told does the + tracking stand in. */
   static int last_play = -2;
   if (play != last_play) {
-    debugPrintf("[input] %s\n", play == 1 ? "in play" : play == 0 ? "in a menu" : "play state unknown");
+    debugPrintf("[input] %s\n", play == 2   ? "in a cutscene"
+                                 : play == 1 ? "in play"
+                                 : play == 0 ? "in a menu"
+                                             : "play state unknown");
     last_play = play;
   }
   int game_keys;
+  int cutscene = play == 2;
   if (play >= 0) {
     g_pause_menu = 0;
-    game_keys = play;
+    game_keys = play != 0;
   } else {
     track_pause(pressed, held, sticks[0], sticks[1]);
     game_keys = !g_pause_menu;
@@ -277,6 +305,8 @@ void mc4_input_poll(int play) {
     int down = (held & k_map[i].button) != 0;
     if (down && !g_held_key[i]) {
       int k = game_keys ? k_map[i].key_game : k_map[i].key_menu;
+      if (cutscene && k_map[i].button != HidNpadButton_Plus)
+        k = 0; /* only + skips a cutscene */
       if (k) {
         g_held_key[i] = k;
         key(k, 1);
@@ -290,7 +320,7 @@ void mc4_input_poll(int play) {
   /* left: move, up positive (as MC4.java's gamepad path: -AXIS_Y) */
   float lx = sticks[0], ly = sticks[1];
   deadzone(&lx, &ly);
-  sprint(game_keys, pressed, held, lx, ly);
+  sprint(game_keys && !cutscene, pressed, held, lx, ly);
   feed(&g_left, f_pad_left, lx, ly);
 
   /* right: look, down positive (AXIS_RZ as it comes) */
@@ -299,5 +329,5 @@ void mc4_input_poll(int play) {
   float sp = g_mc4_cfg.look_speed;
   feed(&g_right, f_pad_right, rx * sp, (g_mc4_cfg.invert_y ? ry : -ry) * sp);
 
-  poll_touch();
+  poll_touch(!cutscene);
 }

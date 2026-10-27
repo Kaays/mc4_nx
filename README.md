@@ -101,7 +101,7 @@ itself. Your saves and settings stay. **Uninstall**: delete the forwarder in the
 | Touch screen | On-screen buttons, prompts | Menus |
 
 On every screen over gameplay (pause, mission failed, debriefing, skippable animations) A selects and B goes back:
-the port reads which menu the game has on top. Videos (the Gameloft logo, the briefings): A, B, + or a tap skips.
+the port reads which menu the game has on top. Videos (the Gameloft logo, the briefings) and in-game cutscenes: only + skips them.
 
 ## config.ini
 

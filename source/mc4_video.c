@@ -12,7 +12,7 @@
  * Sound: the AAC frames, as s16 stereo, take the game's output meanwhile
  * (mc4_audio.c). Pacing: the clock starts at the first picture; each picture
  * waits for its time; the sound's blocking writes keep it at most a few
- * buffers ahead. A, B or + (or a tap) skips. The game's GL state is saved
+ * buffers ahead. + skips (only +: A, B and taps are left alone). The game's GL state is saved
  * before and put back after: the engine keeps its own copy of it.
  *
  * Without FFmpeg (MC4_VIDEO unset: no portlibs32/lib/libavcodec.a) it only
@@ -329,14 +329,7 @@ static int skip_pressed(void) {
     g_vpad_ready = 1;
   }
   padUpdate(&g_vpad);
-  if (padGetButtonsDown(&g_vpad) & (HidNpadButton_A | HidNpadButton_B | HidNpadButton_Plus))
-    return 1;
-  static int was_touching;
-  HidTouchScreenState t;
-  int touching = hidGetTouchScreenStates(&t, 1) && t.count > 0;
-  int tap = was_touching && !touching;
-  was_touching = touching;
-  return tap;
+  return (padGetButtonsDown(&g_vpad) & HidNpadButton_Plus) != 0;
 }
 
 /* ---------------------------------------------------------------- play */

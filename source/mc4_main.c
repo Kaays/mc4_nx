@@ -184,10 +184,22 @@ void mc4_set_double_dn(int on) {
  *   World::IsReallyStarted; its +0x4c flag clear (isInGameplay bails on it);
  *   Gameplay::IsInPauseMenu (+0x57) and IsInMenuReport (+0x58) clear;
  *   Gameplay::IsInDeathMenu false.
- * 1 play, 0 not, -1 cannot tell (symbols missing). */
+ * A cutscene: the Hud the game itself reaches for one (Application::
+ * updateXPCutScene: Gameplay +0x1c, only with a World), its player
+ * character (+0x58, what Hud::IsInCutscene reads) flagged in a cutscene
+ * (Character::SetInCutscene, +0x8a4). Plain reads, each pointer checked.
+ * 2 cutscene, 1 play, 0 not, -1 cannot tell (symbols missing). */
 typedef int (*obj_query_fn)(void *obj);
 static void **g_gameplay;
 static obj_query_fn f_world_started, f_in_death_menu;
+
+static int in_cutscene(uint8_t *gp) {
+  uint8_t *hud = *(uint8_t **)(gp + 0x1c);
+  if (!hud)
+    return 0;
+  uint8_t *ch = *(uint8_t **)(hud + 0x58);
+  return ch && ch[0x8a4];
+}
 
 int mc4_play_state(void) {
   if (!g_gameplay || !f_world_started)
@@ -196,11 +208,15 @@ int mc4_play_state(void) {
   if (!gp)
     return 0;
   void *world = *(void **)(gp + 0x38);
-  if (!world || !(f_world_started(world) & 0xff))
+  if (!world)
     return 0;
-  if (gp[0x4c] || gp[0x57] || gp[0x58])
+  if (gp[0x57] || gp[0x58])
     return 0;
   if (f_in_death_menu && (f_in_death_menu(gp) & 0xff))
+    return 0;
+  if (in_cutscene(gp))
+    return 2;
+  if (gp[0x4c] || !(f_world_started(world) & 0xff))
     return 0;
   return 1;
 }
@@ -353,8 +369,10 @@ void port_run(void) {
     mc4_gl_swap();
     if (g_video_pending) {
       g_video_pending = 0;
-      if (g_video_path[0])
+      if (g_video_path[0]) {
         mc4_video_play(g_video_path);
+        mc4_input_swallow_held(); /* the + that skipped it is not a pause */
+      }
       if (f_video_finished)
         f_video_finished(g_jni_env, g_video_cls);
     }
