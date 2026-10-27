@@ -101,6 +101,12 @@ static JNI_H_DECL(h_patch_obb) { return ret_str(ANDROID_OBB MC4_OBB_PATCH); }
 static JNI_H_DECL(h_country) { return ret_str("US"); }
 static JNI_H_DECL(h_imei) { return ret_str("351066496380730"); }
 static JNI_H_DECL(h_package) { return ret_str(PORT_PACKAGE); }
+/* SUtils.GetApkPath: ApplicationInfo.sourceDir, which the runtime maps to
+ * the player's APK whatever it is called. BITrackingManager::LaunchGame opens
+ * it with libzip to read lib/armeabi-v7a/libModernCombat4.so; with "" the
+ * archive was NULL and _zip_name_locate read it (hardware). */
+static JNI_H_DECL(h_apk_path) { return ret_str("/data/app/" PORT_PACKAGE "-1/base.apk"); }
+static JNI_H_DECL(h_firmware) { return ret_str("4.4.2"); }
 
 static JNI_H_DECL(h_language) { return ret_str("en"); }
 static JNI_H_DECL(h_manufacturer) { return ret_str("Nintendo"); }
@@ -237,6 +243,10 @@ static const Mc4Method k_methods[] = {
     {"getMainFileLocation", NULL, h_main_obb},
     {"getPatchFileLocation", NULL, h_patch_obb},
     {"getPackage", NULL, h_package},
+    {"GetApkPath", NULL, h_apk_path},
+    {"getApkPath", NULL, h_apk_path},
+    {"GetDeviceFirmware", NULL, h_firmware},
+    {"getDeviceFirmware", NULL, h_firmware},
     {"getPreferenceString", NULL, h_empty_str},
     {"UpdatePreferences", NULL, jni_h_void},
     {"UpdatePreferences2", NULL, jni_h_void},
