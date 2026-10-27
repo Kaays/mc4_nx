@@ -14,6 +14,9 @@ void mc4_setup_assets(RtSetupCtx *ctx);
 void mc4_setup_obb(RtSetupCtx *ctx);
 extern int g_mc4_trace_files; /* every opened path to debug.log */
 
+/* mc4_kuser.c: kernel helper pointers in data -> kuser.S (staged image). */
+int mc4_fix_kuser_data(so_module *m);
+
 /* mc4_audio.c: AudioTrack.write -> audout. frames of `chans` (1 or 2)
  * interleaved s16 at `rate` Hz; blocks while the output is full. */
 void mc4_audio_write(const int16_t *pcm, int frames, int chans, int rate);

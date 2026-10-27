@@ -6,8 +6,9 @@
  *   (once; again only when the APK changes), which must be the 1.2.3e build
  *   (its CRC, from the setup's stamp), copies the APK's assets/ out and the
  *   videos out of the main OBB (mc4_setup.c). Then the library is mapped,
- *   relocated, bound to the runtime's bionic shims and sealed. (No SWP in
- *   this one: the MC3 port's rewrite is not needed.)
+ *   relocated, bound to the runtime's bionic shims, its kernel helper
+ *   pointers (code and data, mc4_kuser.c) pointed at kuser.S, and sealed.
+ *   (No SWP in this one: the MC3 port's rewrite is not needed.)
  *
  * port_run: what the Java side does on a phone, in its order (MC4.java c(),
  *   GL2JNIActivity c(), GL2JNIView's renderer):
@@ -100,6 +101,8 @@ int port_load(const char *apk) {
   so_relocate(&g_mc4_mod);
   so_resolve(&g_mc4_mod, NULL, 0, 1);
   so_fix_kuser_helpers(&g_mc4_mod);
+  /* protobuf keeps the kernel helpers' addresses in data, too */
+  mc4_fix_kuser_data(&g_mc4_mod);
   so_finalize(&g_mc4_mod);
   debugPrintf("[mc4] %s mapped at %p\n", MC4_LIB, g_mc4_mod.load_virtbase);
   return 0;
