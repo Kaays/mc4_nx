@@ -19,8 +19,8 @@ Thanks for looking. Any help is welcome: code, tests on a console, or a report o
 | The log | `debug.log` in the game folder, rewritten on every start |
 | Every file the game opens | `trace_files = true` in `config.ini` |
 | Every Java call | `log_java_calls = true` (slow: logging every call costs frames) |
-| Keys and sticks sent to the game | always in `debug.log` (`[input] key 19 down`, `[input] sprint on`) |
-| Which menu is on top | `[input] menu menu_IGM` lines; `menu_csbars` is the in-game HUD |
+| Keys sent to the game | always in `debug.log` (`[input] key 23 down`) |
+| Play, menu or cutscene | `[input] in play`, `[input] in a menu`, `[input] in a cutscene` lines |
 | Crashes | `crash.log` in the game folder (stub addresses are named) and `sdmc:/atmosphere/crash_reports/` |
 | Compile check without the console | `runtime/tools/check.sh` |
 
@@ -28,7 +28,7 @@ Thanks for looking. Any help is welcome: code, tests on a console, or a report o
 
 - `tools/setup_deps.sh` once, then `./build.sh && ./launcher/build.sh` after each change. After adding or removing
   a library in `portlibs32/`, `./build.sh clean` first.
-- Addresses in `source/` (DRM flags, the menu manager, the SWP sites) are for `libModernCombat4.so` 1.1.7g, CRC32
-  `845949ab`; another version needs them found again.
+- Symbols and object offsets in `source/` (DRM flags, the Gameplay / Hud / Character fields) are for
+  `libModernCombat4.so` 1.2.3e, CRC32 `f9bc349f`; another version needs them checked again.
 - Releases: bump `APP_VERSION` in `launcher/Makefile` and `PORT_NPDM_VERSION` in `Makefile`, write
   `docs/releases/v<version>.md`, tag `v<version>`, then `tools/make_release.sh --publish`.

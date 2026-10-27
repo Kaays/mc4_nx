@@ -14,7 +14,7 @@ labels: bug
 
 **Build**
 - NRO from the release ___ or built from commit ___
-- Game: Modern Combat 4 1.1.7g for Android (the only supported version)
+- Game: Modern Combat 4 1.2.3e for Android (the only supported version)
 
 **Logs** (attach, do not paste)
 - `sdmc:/switch/mc4_nx/debug.log` from the start where it happened

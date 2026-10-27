@@ -8,7 +8,8 @@ repository derived from it.
 | Project | Used for | License |
 |---|---|---|
 | [android32](https://github.com/aks796/android32) by aks796 | `runtime/`, unchanged, at the commit in `runtime/UPSTREAM_COMMIT`: `.so` loader, bionic and Android NDK shims, JNI, EGL, setup, the launcher | MIT (`runtime/LICENSE`); `so_util.c` MIT (Andy Nguyen, fgsfds), `nx32_virtmem.c` ISC (libnx authors) |
-| [mc4-vita](https://github.com/v-atamanenko/mc4-vita) by Volodymyr Atamanenko, with Andy Nguyen and Rinnegatamante | The game's start-up order, DRM flags, JNI answers and Xperia Play input path, followed in `source/mc4_main.c`, `source/mc4_jni.c`, `source/mc4_input.c` | MIT |
+| [mc3_nx](https://github.com/Kaays/mc3_nx) | The base of this port: build, setup, audio, video player, launcher, control layout | MIT |
+| [mc3-vita](https://github.com/v-atamanenko/mc3-vita) by Volodymyr Atamanenko, with Andy Nguyen and Rinnegatamante | Through mc3_nx: the Gameloft start-up order, DRM flags and key set, followed in `source/mc4_main.c`, `source/mc4_input.c` | MIT |
 | [nova3-nx](https://github.com/markaurel13/nova3-nx) by markaurel13 | Reference for a Gameloft game on android32 (no code copied) | see its repository |
 
 ## Libraries linked into the NRO
