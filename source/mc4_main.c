@@ -57,6 +57,7 @@ typedef void (*jni_size_fn)(void *env, void *cls, int w, int h);
 static jni_void_fn f_step, f_pause, f_resume, f_video_finished;
 typedef int (*jni_int_ret_int_fn)(void *env, void *obj, int v);
 static jni_int_ret_int_fn f_set_pad;
+static jni_int_fn f_double_up;
 static void *g_activity_cls, *g_glf_cls, *g_video_cls;
 
 /* ---------------------------------------------------------------- setup */
@@ -129,9 +130,9 @@ void mc4_video_requested(const char *name) {
 
 /* ---------------------------------------------------------------- menus
  * The name of the Flash menu on top, read with the engine's own getter:
- * MenuManager::s_instance, MenuManager::GetMenuStackTop(-1) (the current
- * player), whose name is an STLport string at +8 (short: inline at +9;
- * long: the pointer at +0x14), as MenuManager::GetMenuByName compares it.
+ * MenuManager::s_instance, MenuManager::GetMenuStackTop(player) -- a
+ * gameswf::MenuFX::State, whose name is an STLport string at +8 (short:
+ * inline at +9; long: the pointer at +0x14), as MenuFX::getState compares it.
  * All found by their symbols (this library exports them). NULL when there is
  * none (yet). */
 typedef void *(*menu_top_fn)(void *mgr, int player);
@@ -147,13 +148,25 @@ const char *mc4_menu_name(void) {
     return NULL;
   }
   uint8_t *mgr = *g_menu_mgr;
-  uint8_t *m = f_menu_top(mgr, -1);
+  /* -2: the first player with a menu stack (the manager walks them all);
+   * -1 (the "current" player, mgr+0x1c) came back empty on hardware */
+  uint8_t *m = f_menu_top(mgr, -2);
+  if (!m)
+    m = f_menu_top(mgr, -1);
   if (diag)
     debugPrintf("[menu] manager %p (+0x18 %08x, +0x1c %08x) top %p%s\n", (void *)mgr,
                 *(uint32_t *)(mgr + 0x18), *(uint32_t *)(mgr + 0x1c), (void *)m, m ? "" : " (none)");
   if (!m)
     return NULL;
   return (int8_t)m[8] != -1 ? (const char *)(m + 9) : *(const char **)(m + 0x14);
+}
+
+/* ---------------------------------------------------------------- sprint
+ * GL2JNILib.nativeSetDoubleUp: what the Java side sends while up is held
+ * after a double tap (D-pad, Xperia touch pad, a Moga's left stick): sprint. */
+void mc4_set_double_up(int on) {
+  if (f_double_up)
+    f_double_up(g_jni_env, g_glf_cls, on ? 1 : 0);
 }
 
 /* ---------------------------------------------------------------- pad
@@ -276,6 +289,7 @@ void port_run(void) {
   f_resume = (jni_void_fn)maybe(ACT "MC4_resumeGame");
   f_video_finished = (jni_void_fn)maybe(ACT "MyVideoView_SetFinished");
   f_set_pad = (jni_int_ret_int_fn)maybe(ACT "MC4_nativeSetIsMogaConnected");
+  f_double_up = (jni_int_fn)maybe(GLF "nativeSetDoubleUp");
   g_menu_mgr = (void **)maybe("_ZN11MenuManager10s_instanceE");
   f_menu_top = (menu_top_fn)maybe("_ZN11MenuManager15GetMenuStackTopEi");
   if (!g_menu_mgr || !f_menu_top)

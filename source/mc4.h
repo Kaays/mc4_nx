@@ -38,6 +38,8 @@ void mc4_input_poll(int have_menus); /* 1: mc4_menu_name() works */
 /* mc4_main.c: the Flash menu on top (MC4_HUD_MENU in gameplay), or NULL. */
 const char *mc4_menu_name(void);
 #define MC4_HUD_MENU "HUD"
+/* mc4_main.c: GL2JNILib.nativeSetDoubleUp (sprint). */
+void mc4_set_double_up(int on);
 /* The gamepad mode the game is told (MC4.java: 5, a "Generic X-Box" pad). */
 #define MC4_PAD_MODE 5
 

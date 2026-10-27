@@ -6,13 +6,13 @@
  * nativeSetTouchPadDTLeft and the right one as nativeSetTouchPadDT, each
  * -1..1 (Hud::UpdateMovementControls / UpdateCameraControls read them).
  *
- * In play, the keys the HUD tests (libModernCombat4.so: the calls to
- * Application::isGamePadBtnPressed / wasGamePadBtnReleased):
- *   ZR 103 fire          ZL 102 aim (iron sight)
- *   R  123 grenade       L3 100 sprint (Character::SwitchSprintMode, on release)
- *   Y  99 reload         X  109 weapon switch (SELECT)
- *   B  20 crouch         A  23 jump / action
- *   L  22 next weapon    R3 107
+ * The layout follows the MC3 port (the same Gameloft key set), with what the
+ * hardware tests of MC4 showed:
+ *   ZR 103 fire          ZL 102 aim
+ *   R  123 grenade       L3 sprint (nativeSetDoubleUp: on with a click, off
+ *                           with another, the stick at rest, aiming or a menu)
+ *   Y  99 reload         X / L 100 weapon switch
+ *   B  20 crouch         A  23 action
  *   D-pad 19-22   + 108 START (pause)   - 109 SELECT
  * In menus (any Flash menu on top but the HUD): A selects (23), B goes back
  * (BACK reaches the game as MC4.nativeHandleKey(4) on release, as on a
@@ -66,13 +66,11 @@ static const Map k_map[] = {
     {HidNpadButton_ZR, AK_BUTTON_R1, AK_BUTTON_R1},
     {HidNpadButton_ZL, AK_BUTTON_L1, AK_BUTTON_L1},
     {HidNpadButton_R, AK_MOVE_END, AK_NONE},
-    {HidNpadButton_L, AK_DPAD_RIGHT, AK_NONE},
+    {HidNpadButton_L, AK_BUTTON_Y, AK_NONE},
     {HidNpadButton_B, AK_DPAD_DOWN, AK_BACK},
     {HidNpadButton_A, AK_DPAD_CENTER, AK_DPAD_CENTER},
     {HidNpadButton_Y, AK_BUTTON_X, AK_BUTTON_X},
-    {HidNpadButton_X, AK_BUTTON_SELECT, AK_BUTTON_Y},
-    {HidNpadButton_StickL, AK_BUTTON_Y, AK_NONE},
-    {HidNpadButton_StickR, AK_BUTTON_THUMBR, AK_NONE},
+    {HidNpadButton_X, AK_BUTTON_Y, AK_BUTTON_Y},
     {HidNpadButton_Up, AK_DPAD_UP, AK_DPAD_UP},
     {HidNpadButton_Down, AK_DPAD_DOWN, AK_DPAD_DOWN},
     {HidNpadButton_Left, AK_DPAD_LEFT, AK_DPAD_LEFT},
@@ -208,6 +206,26 @@ static void poll_touch(void) {
   old = st;
 }
 
+/* Sprint: an L3 click turns it on (nativeSetDoubleUp(1), held for the
+ * player), another click, the left stick at rest for 8 frames, aiming or a
+ * menu turn it off. */
+static int g_sprint;
+static int g_sprint_idle;
+
+static void sprint(int game_keys, u64 pressed, u64 held, float lx, float ly) {
+  int want = g_sprint;
+  if (game_keys && (pressed & HidNpadButton_StickL))
+    want = !g_sprint;
+  g_sprint_idle = (lx == 0.0f && ly == 0.0f) ? g_sprint_idle + 1 : 0;
+  if (!game_keys || g_sprint_idle > 8 || (held & HidNpadButton_ZL))
+    want = 0;
+  if (want != g_sprint) {
+    g_sprint = want;
+    debugPrintf("[input] sprint %s\n", want ? "on" : "off");
+    mc4_set_double_up(want);
+  }
+}
+
 /* When the menu on top cannot be read (no manager yet, or none found): + in
  * play is taken to open the pause menu and + again, or playing again, to
  * close it; everything else is play. */
@@ -267,6 +285,7 @@ void mc4_input_poll(int have_menus) {
   /* left: move, up positive (as MC4.java's gamepad path: -AXIS_Y) */
   float lx = sticks[0], ly = sticks[1];
   deadzone(&lx, &ly);
+  sprint(game_keys, pressed, held, lx, ly);
   feed(&g_left, f_pad_left, lx, ly);
 
   /* right: look, down positive (AXIS_RZ as it comes) */
