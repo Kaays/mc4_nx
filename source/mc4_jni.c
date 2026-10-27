@@ -163,6 +163,65 @@ static JNI_H_DECL(h_exit_game) {
   return jv_none();
 }
 
+/* ------------------------------------------------------------ device id
+ * SendInfo.getGLUID: four numbers made at random once and kept in the app's
+ * preferences ("GLU"), the id the game ties its save to. The runtime
+ * answered null, the engine made a new one at every start
+ * ("SAVE GetLocalDeviceGLUID_OLD = ..." changed each time) and the saved
+ * progress (campaign money) did not load. Made once here, kept in
+ * <game folder>/data/gluid.bin. getGLUIDX86: the same as ints. */
+static uint32_t g_gluid[4];
+
+static void gluid_load(void) {
+  static int done;
+  if (done)
+    return;
+  done = 1;
+  char path[DCR_PATH_MAX];
+  rt_root_path(path, sizeof path, "data/gluid.bin");
+  size_t len = 0;
+  uint8_t *buf = rt_read_whole(path, &len);
+  if (buf && len == sizeof g_gluid) {
+    memcpy(g_gluid, buf, sizeof g_gluid);
+    free(buf);
+    return;
+  }
+  free(buf);
+  randomGet(g_gluid, sizeof g_gluid);
+  for (int i = 0; i < 4; i++)
+    g_gluid[i] &= 0x7fffffffu; /* MC4.java keeps them positive */
+  if (!rt_write_atomic(path, g_gluid, sizeof g_gluid))
+    debugPrintf("[mc4] could not keep the device id in %s\n", path);
+  debugPrintf("[mc4] new device id %u %u %u %u\n", g_gluid[0], g_gluid[1], g_gluid[2], g_gluid[3]);
+}
+
+static JNI_H_DECL(h_gluid) {
+  gluid_load();
+  JObj *arr = jni_array('J', 4);
+  if (arr)
+    for (int i = 0; i < 4; i++)
+      ((jlong *)arr->a.data)[i] = g_gluid[i];
+  return jv_l(arr);
+}
+
+static JNI_H_DECL(h_gluid_x86) {
+  gluid_load();
+  JObj *arr = jni_array('I', 4);
+  if (arr)
+    for (int i = 0; i < 4; i++)
+      ((jint *)arr->a.data)[i] = (jint)g_gluid[i];
+  return jv_l(arr);
+}
+
+/* Android id / serial: stable strings from the same id (the save and the
+ * "shared values" key on them too). */
+static JNI_H_DECL(h_android_id) {
+  gluid_load();
+  char b[24];
+  snprintf(b, sizeof b, "%08x%08x", g_gluid[0], g_gluid[1]);
+  return ret_str(b);
+}
+
 /* ------------------------------------------------------------ objects */
 static JNI_H_DECL(h_context) { return jv_l(jni_singleton("android/content/Context")); }
 static JNI_H_DECL(h_object) { return ret_obj_of(m, NULL); }
@@ -313,6 +372,11 @@ static const Mc4Method k_methods[] = {
     {"GetDeviceName", NULL, h_model},
     {"getDeviceName", NULL, h_model},
     {"getResource", NULL, h_get_resource},
+    {"getGLUID", NULL, h_gluid},
+    {"getGLUIDX86", NULL, h_gluid_x86},
+    {"getAndroidId", NULL, h_android_id},
+    {"getSerial", NULL, h_android_id},
+    {"getSerialNo", NULL, h_android_id},
     {"hasConnectivity", NULL, jni_h_false},
     {"initCheckConnectionType", NULL, jni_h_zero},
     {"setThreadPriority", NULL, jni_h_void},

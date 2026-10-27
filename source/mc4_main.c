@@ -176,31 +176,31 @@ void mc4_set_double_dn(int on) {
 }
 
 /* ---------------------------------------------------------------- play
- * Is the player in play (not a menu, the pause menu, a cutscene)? The way
- * Application::OnKeyUp decides what BACK does: the current player's menu
- * info (MenuManager::GetMenuInfo(-1)), its menu object at +0xc (else +0x10)
- * -- the Hud -- and Hud::isInGameplay (the world started, no cutscene, the
- * HUD up), then Hud::isInMenuBase (a menu over it: pause, death...).
- * 1 play, 0 not, -1 cannot tell. */
-typedef uint8_t *(*menu_info_fn)(void *mgr, int player);
-typedef int (*hud_query_fn)(void *hud);
-static menu_info_fn f_menu_info;
-static hud_query_fn f_hud_in_play, f_hud_in_menu;
+ * Is the player in play (not a menu, loading, the pause or death menu)?
+ * What Hud::isInGameplay checks on the Gameplay object, without the Hud
+ * (the menu object the first try took for it was not always one: hardware,
+ * Hud::IsInCutscene read through a non-Hud while a level loaded):
+ *   Gameplay::s_instance set; its World (+0x38) set and
+ *   World::IsReallyStarted; its +0x4c flag clear (isInGameplay bails on it);
+ *   Gameplay::IsInPauseMenu (+0x57) and IsInMenuReport (+0x58) clear;
+ *   Gameplay::IsInDeathMenu false.
+ * 1 play, 0 not, -1 cannot tell (symbols missing). */
+typedef int (*obj_query_fn)(void *obj);
+static void **g_gameplay;
+static obj_query_fn f_world_started, f_in_death_menu;
 
 int mc4_play_state(void) {
-  if (!g_menu_mgr || !*g_menu_mgr || !f_menu_info || !f_hud_in_play)
+  if (!g_gameplay || !f_world_started)
     return -1;
-  uint8_t *info = f_menu_info(*g_menu_mgr, -1);
-  if (!info)
-    return -1;
-  void *hud = *(void **)(info + 0xc);
-  if (!hud)
-    hud = *(void **)(info + 0x10);
-  if (!hud)
-    return -1;
-  if (!(f_hud_in_play(hud) & 0xff))
+  uint8_t *gp = *g_gameplay;
+  if (!gp)
     return 0;
-  if (f_hud_in_menu && (f_hud_in_menu(hud) & 0xff))
+  void *world = *(void **)(gp + 0x38);
+  if (!world || !(f_world_started(world) & 0xff))
+    return 0;
+  if (gp[0x4c] || gp[0x57] || gp[0x58])
+    return 0;
+  if (f_in_death_menu && (f_in_death_menu(gp) & 0xff))
     return 0;
   return 1;
 }
@@ -327,9 +327,9 @@ void port_run(void) {
   f_set_pad = (jni_int_ret_int_fn)maybe(ACT "MC4_nativeSetIsMogaConnected");
   f_double_up = (jni_int_fn)maybe(GLF "nativeSetDoubleUp");
   f_double_dn = (jni_int_fn)maybe(GLF "nativeSetDoubleDn");
-  f_menu_info = (menu_info_fn)maybe("_ZN11MenuManager11GetMenuInfoEi");
-  f_hud_in_play = (hud_query_fn)maybe("_ZN3Hud12isInGameplayEv");
-  f_hud_in_menu = (hud_query_fn)maybe("_ZN3Hud12isInMenuBaseEv");
+  g_gameplay = (void **)maybe("_ZN8Gameplay10s_instanceE");
+  f_world_started = (obj_query_fn)maybe("_ZN5World15IsReallyStartedEv");
+  f_in_death_menu = (obj_query_fn)maybe("_ZNK8Gameplay13IsInDeathMenuEv");
   g_menu_mgr = (void **)maybe("_ZN11MenuManager10s_instanceE");
   f_menu_top = (menu_top_fn)maybe("_ZN11MenuManager15GetMenuStackTopEi");
   if (!g_menu_mgr || !f_menu_top)
