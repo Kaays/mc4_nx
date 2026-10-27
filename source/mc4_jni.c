@@ -22,6 +22,8 @@
 #include <string.h>
 #include <switch.h>
 
+#include "dcr_path.h"
+#include "dcr_setup.h"
 #include "jni.h"
 #include "port_config.h"
 #include "util.h"
@@ -99,6 +101,37 @@ static JNI_H_DECL(h_patch_obb) { return ret_str(ANDROID_OBB MC4_OBB_PATCH); }
 static JNI_H_DECL(h_country) { return ret_str("US"); }
 static JNI_H_DECL(h_imei) { return ret_str("351066496380730"); }
 static JNI_H_DECL(h_package) { return ret_str(PORT_PACKAGE); }
+
+static JNI_H_DECL(h_language) { return ret_str("en"); }
+static JNI_H_DECL(h_manufacturer) { return ret_str("Nintendo"); }
+static JNI_H_DECL(h_model) { return ret_str("Switch"); }
+
+/* ------------------------------------------------------------ assets
+ * GL2JNILib.getResource(name): the whole file out of the APK's assets/
+ * (getAssets().open), a leading "." dropped; null when there is none. Here
+ * from the copy in <game folder>/assets/ (mc4_setup.c). glot's tracking reads
+ * eventParameters.json this way, and died on the null the runtime answered
+ * (hardware: TrackingManager::PrepareEventParameters, a NULL+0x90 read). */
+static JNI_H_DECL(h_get_resource) {
+  const char *name = a ? jni_utf(a[0].l) : "";
+  while (*name == '.' || *name == '/')
+    name++;
+  char rel[512], path[DCR_PATH_MAX];
+  snprintf(rel, sizeof rel, "assets/%s", name);
+  rt_root_path(path, sizeof path, rel);
+  size_t len = 0;
+  uint8_t *buf = rt_read_whole(path, &len);
+  if (!buf) {
+    debugPrintf("[mc4] getResource(%s): not in assets/\n", name);
+    return jv_l(NULL);
+  }
+  JObj *arr = jni_array('B', (jsize)len);
+  if (arr)
+    memcpy(arr->a.data, buf, len);
+  free(buf);
+  debugPrintf("[mc4] getResource(%s): %u bytes\n", name, (unsigned)len);
+  return jv_l(arr);
+}
 
 /* ------------------------------------------------------------ objects */
 static JNI_H_DECL(h_context) { return jv_l(jni_singleton("android/content/Context")); }
@@ -236,6 +269,19 @@ static const Mc4Method k_methods[] = {
     {"getMasterVolume", NULL, h_volume},
     {"setMasterVolume", NULL, jni_h_void},
     {"getCountry", NULL, h_country},
+    {"getLocaleCountry", NULL, h_country},
+    {"getLocaleLanguage", NULL, h_language},
+    {"getDeviceLanguage", NULL, h_language},
+    {"GetManufacturer", NULL, h_manufacturer},
+    {"getPhoneManufacturer", NULL, h_manufacturer},
+    {"getManufacturerModel", NULL, h_model},
+    {"getPhoneModel", NULL, h_model},
+    {"GetDeviceName", NULL, h_model},
+    {"getDeviceName", NULL, h_model},
+    {"getResource", NULL, h_get_resource},
+    {"hasConnectivity", NULL, jni_h_false},
+    {"initCheckConnectionType", NULL, jni_h_zero},
+    {"setThreadPriority", NULL, jni_h_void},
     {"getIMEI", NULL, h_imei},
     {"getSystemUpTimeMillis", NULL, h_uptime},
     {"setOrientationEnabled", NULL, jni_h_void},
