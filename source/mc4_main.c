@@ -55,7 +55,8 @@ typedef void (*jni_int_fn)(void *env, void *cls, int v);
 typedef void (*jni_size_fn)(void *env, void *cls, int w, int h);
 
 static jni_void_fn f_step, f_pause, f_resume, f_video_finished;
-static jni_int_fn f_double_up, f_double_dn;
+typedef int (*jni_int_ret_int_fn)(void *env, void *obj, int v);
+static jni_int_ret_int_fn f_set_pad;
 static void *g_activity_cls, *g_glf_cls, *g_video_cls;
 
 /* ---------------------------------------------------------------- setup */
@@ -138,23 +139,36 @@ static void **g_menu_mgr;
 static menu_top_fn f_menu_top;
 
 const char *mc4_menu_name(void) {
-  if (!g_menu_mgr || !f_menu_top || !*g_menu_mgr)
+  static unsigned calls;
+  int diag = (calls++ % 600) == 0; /* every ~10 s: what the lookup sees */
+  if (!g_menu_mgr || !f_menu_top || !*g_menu_mgr) {
+    if (diag)
+      debugPrintf("[menu] manager %p -> %p: none\n", (void *)g_menu_mgr, g_menu_mgr ? *g_menu_mgr : NULL);
     return NULL;
-  uint8_t *m = f_menu_top(*g_menu_mgr, -1);
+  }
+  uint8_t *mgr = *g_menu_mgr;
+  uint8_t *m = f_menu_top(mgr, -1);
+  if (diag)
+    debugPrintf("[menu] manager %p (+0x18 %08x, +0x1c %08x) top %p%s\n", (void *)mgr,
+                *(uint32_t *)(mgr + 0x18), *(uint32_t *)(mgr + 0x1c), (void *)m, m ? "" : " (none)");
   if (!m)
     return NULL;
   return (int8_t)m[8] != -1 ? (const char *)(m + 9) : *(const char **)(m + 0x14);
 }
 
-/* ---------------------------------------------------------------- sprint */
-void mc4_set_double_up(int on) {
-  if (f_double_up)
-    f_double_up(g_jni_env, g_glf_cls, on ? 1 : 0);
-}
-
-void mc4_set_double_dn(int on) {
-  if (f_double_dn)
-    f_double_dn(g_jni_env, g_glf_cls, on ? 1 : 0);
+/* ---------------------------------------------------------------- pad
+ * MC4.nativeSetIsMogaConnected(mode): what MC4.java's controller watch sends
+ * (every 3 s, when it changes). It stores the mode in the Application, so it
+ * only takes once that exists; it answers whether it did. Sent until it
+ * does, then every few seconds as the Java side would (cheap). */
+static void tell_pad_mode(uint64_t frame) {
+  static int told;
+  if (!f_set_pad || (told && frame % 180))
+    return;
+  int ok = f_set_pad(g_jni_env, g_activity_cls, MC4_PAD_MODE);
+  if (ok && !told)
+    debugPrintf("[mc4] gamepad mode %d set (frame %llu)\n", MC4_PAD_MODE, (unsigned long long)frame);
+  told = ok;
 }
 
 /* ---------------------------------------------------------------- focus */
@@ -261,8 +275,7 @@ void port_run(void) {
   f_pause = (jni_void_fn)maybe(ACT "MC4_pauseGame");
   f_resume = (jni_void_fn)maybe(ACT "MC4_resumeGame");
   f_video_finished = (jni_void_fn)maybe(ACT "MyVideoView_SetFinished");
-  f_double_up = (jni_int_fn)maybe(GLF "nativeSetDoubleUp");
-  f_double_dn = (jni_int_fn)maybe(GLF "nativeSetDoubleDn");
+  f_set_pad = (jni_int_ret_int_fn)maybe(ACT "MC4_nativeSetIsMogaConnected");
   g_menu_mgr = (void **)maybe("_ZN11MenuManager10s_instanceE");
   f_menu_top = (menu_top_fn)maybe("_ZN11MenuManager15GetMenuStackTopEi");
   if (!g_menu_mgr || !f_menu_top)
@@ -278,8 +291,11 @@ void port_run(void) {
       continue;
     }
     dcr_boost_frame_begin();
+    tell_pad_mode(frame);
     mc4_input_poll(g_menu_mgr && f_menu_top);
     f_step(g_jni_env, g_glf_cls);
+    if (rt_exit_requested()) /* exitGame: the game has shut down */
+      break;
     mc4_gl_swap();
     if (g_video_pending) {
       g_video_pending = 0;

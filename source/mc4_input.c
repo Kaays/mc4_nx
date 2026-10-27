@@ -1,25 +1,23 @@
 /* mc4_input.c -- controllers and the touch screen, into the engine.
  *
- * The device is presented as an Xperia Play slid open (mc4_jni.c), the
- * engine's controller path: buttons arrive as Android key codes through
- * GL2JNILib.keyboardEvent(key, down), the left stick as
+ * The game is told a gamepad is connected (mc4_jni.c, mc4_main.c: MC4.java's
+ * "Generic X-Box" mode), its own controller path: buttons arrive as Android
+ * key codes through GL2JNILib.keyboardEvent(key, down), the left stick as
  * nativeSetTouchPadDTLeft and the right one as nativeSetTouchPadDT, each
- * -1..1 with pointer -1 (what MC4.java sends for a gamepad's sticks). Sprint
- * is GL2JNILib.nativeSetDoubleUp: what the Java side sends on a double tap of
- * up, on the D-pad or the Xperia's touch pad.
+ * -1..1 (Hud::UpdateMovementControls / UpdateCameraControls read them).
  *
- * Face buttons follow the layout MC4.java gives an Xbox-style pad (its
- * "Generic X-Box" mode remaps A to 23 and B to 123 before the engine sees
- * them), by position on the Switch:
- *   B (bottom) 23 DPAD_CENTER   A (right) 123 MOVE_END
- *   Y (left)   99 BUTTON_X      X (top)   100 BUTTON_Y
- *   ZR 103 R1 (fire)   ZL 102 L1 (aim)   R 105 R2   L 104 L2
- *   L3 sprint (nativeSetDoubleUp)   R3 107 THUMBR
- *   D-pad 19-22   + 108 START   - 109 SELECT
+ * In play, the keys the HUD tests (libModernCombat4.so: the calls to
+ * Application::isGamePadBtnPressed / wasGamePadBtnReleased):
+ *   ZR 103 fire          ZL 102 aim (iron sight)
+ *   R  123 grenade       L3 100 sprint (Character::SwitchSprintMode, on release)
+ *   Y  99 reload         X  109 weapon switch (SELECT)
+ *   B  20 crouch         A  23 jump / action
+ *   L  22 next weapon    R3 107
+ *   D-pad 19-22   + 108 START (pause)   - 109 SELECT
  * In menus (any Flash menu on top but the HUD): A selects (23), B goes back
  * (BACK reaches the game as MC4.nativeHandleKey(4) on release, as on a
- * phone), the D-pad moves. Which actions the engine puts on each key is its
- * own business: debug.log lists every key sent ("[input] key 23 down").
+ * phone), the D-pad moves. debug.log lists every key sent
+ * ("[input] key 23 down").
  *
  * A key held by two buttons at once is pressed once and released when the
  * last one lets go; each button releases the key it pressed even if the game
@@ -67,12 +65,13 @@ typedef struct {
 static const Map k_map[] = {
     {HidNpadButton_ZR, AK_BUTTON_R1, AK_BUTTON_R1},
     {HidNpadButton_ZL, AK_BUTTON_L1, AK_BUTTON_L1},
-    {HidNpadButton_R, AK_BUTTON_R2, AK_NONE},
-    {HidNpadButton_L, AK_BUTTON_L2, AK_NONE},
-    {HidNpadButton_B, AK_DPAD_CENTER, AK_BACK},
-    {HidNpadButton_A, AK_MOVE_END, AK_DPAD_CENTER},
+    {HidNpadButton_R, AK_MOVE_END, AK_NONE},
+    {HidNpadButton_L, AK_DPAD_RIGHT, AK_NONE},
+    {HidNpadButton_B, AK_DPAD_DOWN, AK_BACK},
+    {HidNpadButton_A, AK_DPAD_CENTER, AK_DPAD_CENTER},
     {HidNpadButton_Y, AK_BUTTON_X, AK_BUTTON_X},
-    {HidNpadButton_X, AK_BUTTON_Y, AK_BUTTON_Y},
+    {HidNpadButton_X, AK_BUTTON_SELECT, AK_BUTTON_Y},
+    {HidNpadButton_StickL, AK_BUTTON_Y, AK_NONE},
     {HidNpadButton_StickR, AK_BUTTON_THUMBR, AK_NONE},
     {HidNpadButton_Up, AK_DPAD_UP, AK_DPAD_UP},
     {HidNpadButton_Down, AK_DPAD_DOWN, AK_DPAD_DOWN},
@@ -209,35 +208,9 @@ static void poll_touch(void) {
   old = st;
 }
 
-/* Sprint (nativeSetDoubleUp). Toggle (config sprint_toggle, the default): one
- * L3 click, until another click, the left stick at rest for 8 frames, aiming,
- * or leaving play. Hold: while L3 is down. */
-static int g_sprint;
-static int g_sprint_idle;
-
-static void sprint(int game_keys, u64 pressed, u64 held, float lx, float ly) {
-  int want;
-  if (g_mc4_cfg.sprint_toggle) {
-    want = g_sprint;
-    if (game_keys && (pressed & HidNpadButton_StickL))
-      want = !g_sprint;
-    g_sprint_idle = (lx == 0.0f && ly == 0.0f) ? g_sprint_idle + 1 : 0;
-    if (g_sprint_idle > 8 || (held & HidNpadButton_ZL))
-      want = 0;
-  } else {
-    want = (held & HidNpadButton_StickL) != 0;
-  }
-  if (!game_keys)
-    want = 0;
-  if (want != g_sprint) {
-    g_sprint = want;
-    debugPrintf("[input] sprint %s\n", want ? "on" : "off");
-    mc4_set_double_up(want);
-  }
-}
-
-/* Without the menu manager (not found by its symbols): + in play is taken to
- * open the pause menu and + again, or playing again, to close it. */
+/* When the menu on top cannot be read (no manager yet, or none found): + in
+ * play is taken to open the pause menu and + again, or playing again, to
+ * close it; everything else is play. */
 static int g_pause_menu;
 
 static void track_pause(u64 pressed, u64 held, float lx, float ly) {
@@ -269,8 +242,9 @@ void mc4_input_poll(int have_menus) {
     debugPrintf("[input] menu %s\n", last_menu);
   }
   int game_keys;
-  if (have_menus) {
-    game_keys = menu && strstr(menu, MC4_HUD_MENU) != NULL;
+  if (have_menus && menu) {
+    g_pause_menu = 0;
+    game_keys = strstr(menu, MC4_HUD_MENU) != NULL;
   } else {
     track_pause(pressed, held, sticks[0], sticks[1]);
     game_keys = !g_pause_menu;
@@ -293,7 +267,6 @@ void mc4_input_poll(int have_menus) {
   /* left: move, up positive (as MC4.java's gamepad path: -AXIS_Y) */
   float lx = sticks[0], ly = sticks[1];
   deadzone(&lx, &ly);
-  sprint(game_keys, pressed, held, lx, ly);
   feed(&g_left, f_pad_left, lx, ly);
 
   /* right: look, down positive (AXIS_RZ as it comes) */

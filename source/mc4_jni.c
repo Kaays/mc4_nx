@@ -25,6 +25,7 @@
 #include "dcr_path.h"
 #include "dcr_setup.h"
 #include "jni.h"
+#include "rt_applet.h"
 #include "port_config.h"
 #include "util.h"
 
@@ -108,7 +109,7 @@ static JNI_H_DECL(h_package) { return ret_str(PORT_PACKAGE); }
 static JNI_H_DECL(h_apk_path) { return ret_str("/data/app/" PORT_PACKAGE "-1/base.apk"); }
 static JNI_H_DECL(h_firmware) { return ret_str("4.4.2"); }
 
-static JNI_H_DECL(h_language) { return ret_str("en"); }
+static JNI_H_DECL(h_language) { return ret_str(g_mc4_cfg.lang); }
 static JNI_H_DECL(h_manufacturer) { return ret_str("Nintendo"); }
 static JNI_H_DECL(h_model) { return ret_str("Switch"); }
 
@@ -137,6 +138,21 @@ static JNI_H_DECL(h_get_resource) {
   free(buf);
   debugPrintf("[mc4] getResource(%s): %u bytes\n", name, (unsigned)len);
   return jv_l(arr);
+}
+
+/* A gamepad is connected: MC4.java's "Generic X-Box" mode (5). The engine
+ * then reads the right stick (Hud::UpdateCameraControls looks at
+ * nativeSetTouchPadDT only with a pad mode set: Application+0xa8c, which
+ * MC4.nativeSetIsMogaConnected writes; mc4_main.c sets it). */
+static JNI_H_DECL(h_pad_mode) { return jv_i(MC4_PAD_MODE); }
+
+/* GL2JNILib.exitGame (Exit in the main menu): the game has shut itself down;
+ * the frame loop must stop calling into it (hardware: a key sent after it
+ * reached Application::AddKeyUp on a NULL Application). */
+static JNI_H_DECL(h_exit_game) {
+  debugPrintf("[mc4] exitGame\n");
+  rt_request_exit();
+  return jv_none();
 }
 
 /* ------------------------------------------------------------ objects */
@@ -257,7 +273,7 @@ static const Mc4Method k_methods[] = {
     /* the device: an Xperia Play, slid open (keys + touch pads) */
     {"isXperiaPlay", NULL, jni_h_true},
     {"isDeviceOpened", NULL, jni_h_true},
-    {"isMogaConnected", NULL, jni_h_zero},
+    {"isMogaConnected", NULL, h_pad_mode},
     {"mustSwapButtons", NULL, jni_h_true}, /* MC4.java: always */
     {"isKindleDevice", NULL, jni_h_false},
     {"isKindleOne", NULL, jni_h_false},
@@ -317,6 +333,7 @@ static const Mc4Method k_methods[] = {
     {"invalidBackKey", NULL, jni_h_void},
     {"ShowAlert", NULL, jni_h_void},
     {"Exit", NULL, jni_h_void},
+    {"exitGame", NULL, h_exit_game},
 
     /* online, social, store, tracking: no network (the servers are gone) */
     {"IsWifiEnabled", NULL, jni_h_zero},

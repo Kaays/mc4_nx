@@ -38,10 +38,8 @@ void mc4_input_poll(int have_menus); /* 1: mc4_menu_name() works */
 /* mc4_main.c: the Flash menu on top (MC4_HUD_MENU in gameplay), or NULL. */
 const char *mc4_menu_name(void);
 #define MC4_HUD_MENU "HUD"
-/* mc4_main.c: GL2JNILib.nativeSetDoubleUp / Dn (sprint, prone: what the Java
- * side sends on a double tap of up / down). */
-void mc4_set_double_up(int on);
-void mc4_set_double_dn(int on);
+/* The gamepad mode the game is told (MC4.java: 5, a "Generic X-Box" pad). */
+#define MC4_PAD_MODE 5
 
 /* mc4_main.c: a briefing video was asked for (mc4_jni.c). */
 void mc4_video_requested(const char *name);
@@ -58,7 +56,7 @@ typedef struct {
   int invert_y;       /* right stick Y inverted */
   int touch;          /* touch screen passed to the game */
   int generation;     /* MC4.getGeneration: the engine's quality tier (9, 1, 0) */
-  int sprint_toggle;  /* L3 clicks sprint on/off instead of being held */
+  const char *lang;   /* the device language the game is told ("en", "tr"...) */
 } Mc4Config;
 extern Mc4Config g_mc4_cfg;
 
